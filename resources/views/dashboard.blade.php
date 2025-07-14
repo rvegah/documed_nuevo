@@ -23,7 +23,13 @@
                         <div class="card bg-primary text-white">
                             <div class="card-body text-center">
                                 <i class="fas fa-building fa-2x mb-2"></i>
-                                <h4>{{ \App\Models\Company::count() }}</h4>
+                                <h4>
+                                    @if(auth()->user()->isAdmin())
+                                        {{ \App\Models\Company::count() }}
+                                    @else
+                                        {{ \App\Models\Company::where('user_id', auth()->id())->count() }}
+                                    @endif
+                                </h4>
                                 <p>Empresas Registradas</p>
                             </div>
                         </div>
@@ -32,7 +38,15 @@
                         <div class="card bg-success text-white">
                             <div class="card-body text-center">
                                 <i class="fas fa-users fa-2x mb-2"></i>
-                                <h4>{{ \App\Models\Staff::count() }}</h4>
+                                <h4>
+                                    @if(auth()->user()->isAdmin())
+                                        {{ \App\Models\Staff::count() }}
+                                    @else
+                                        {{ \App\Models\Staff::whereHas('company', function($query) { 
+                                            $query->where('user_id', auth()->id()); 
+                                        })->count() }}
+                                    @endif
+                                </h4>
                                 <p>Personal Registrado</p>
                             </div>
                         </div>
@@ -41,7 +55,22 @@
                         <div class="card bg-info text-white">
                             <div class="card-body text-center">
                                 <i class="fas fa-file-alt fa-2x mb-2"></i>
-                                <h4>{{ \App\Models\Company::with('documents')->get()->sum('documents.count') + \App\Models\Staff::with('documents')->get()->sum('documents.count') }}</h4>
+                                @php
+                                    if(auth()->user()->isAdmin()) {
+                                        // Admin ve todos los documentos
+                                        $totalDocs = \App\Models\Company::with('documents')->get()->sum('documents.count') + 
+                                                    \App\Models\Staff::with('documents')->get()->sum('documents.count');
+                                    } else {
+                                        // Usuario normal solo ve sus documentos
+                                        $userCompanies = \App\Models\Company::where('user_id', auth()->id())->with('documents')->get();
+                                        $userStaff = \App\Models\Staff::whereHas('company', function($query) { 
+                                            $query->where('user_id', auth()->id()); 
+                                        })->with('documents')->get();
+                                        
+                                        $totalDocs = $userCompanies->sum('documents.count') + $userStaff->sum('documents.count');
+                                    }
+                                @endphp
+                                <h4>{{ $totalDocs }}</h4>
                                 <p>Documentos Totales</p>
                             </div>
                         </div>
@@ -51,17 +80,36 @@
                             <div class="card-body text-center">
                                 <i class="fas fa-clock fa-2x mb-2"></i>
                                 @php
-                                    $pendingCompanyDocs = \App\Models\Company::with(['documents' => function($q) { 
-                                        $q->where('valid', false)->orWhereNull('valid'); 
-                                    }])->get()->sum(function($company) { 
-                                        return $company->documents->count(); 
-                                    });
-                                    
-                                    $pendingStaffDocs = \App\Models\Staff::with(['documents' => function($q) { 
-                                        $q->where('valid', false)->orWhereNull('valid'); 
-                                    }])->get()->sum(function($staff) { 
-                                        return $staff->documents->count(); 
-                                    });
+                                    if(auth()->user()->isAdmin()) {
+                                        // Admin ve todos los documentos pendientes
+                                        $pendingCompanyDocs = \App\Models\Company::with(['documents' => function($q) { 
+                                            $q->where('valid', false)->orWhereNull('valid'); 
+                                        }])->get()->sum(function($company) { 
+                                            return $company->documents->count(); 
+                                        });
+                                        
+                                        $pendingStaffDocs = \App\Models\Staff::with(['documents' => function($q) { 
+                                            $q->where('valid', false)->orWhereNull('valid'); 
+                                        }])->get()->sum(function($staff) { 
+                                            return $staff->documents->count(); 
+                                        });
+                                    } else {
+                                        // Usuario normal solo ve sus documentos pendientes
+                                        $pendingCompanyDocs = \App\Models\Company::where('user_id', auth()->id())
+                                            ->with(['documents' => function($q) { 
+                                                $q->where('valid', false)->orWhereNull('valid'); 
+                                            }])->get()->sum(function($company) { 
+                                                return $company->documents->count(); 
+                                            });
+                                        
+                                        $pendingStaffDocs = \App\Models\Staff::whereHas('company', function($query) { 
+                                                $query->where('user_id', auth()->id()); 
+                                            })->with(['documents' => function($q) { 
+                                                $q->where('valid', false)->orWhereNull('valid'); 
+                                            }])->get()->sum(function($staff) { 
+                                                return $staff->documents->count(); 
+                                            });
+                                    }
                                     
                                     $totalPending = $pendingCompanyDocs + $pendingStaffDocs;
                                 @endphp

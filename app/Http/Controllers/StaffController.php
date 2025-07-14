@@ -13,10 +13,14 @@ class StaffController extends Controller
 {
     /**
      * Display a listing of the resource.
+     * ACTUALIZADO: Verifica que el usuario tenga acceso a la empresa
      */
     public function index(Company $company)
     {
         try {
+            // NUEVO: Verificar autorización sobre la empresa
+            $this->authorizeCompanyAccess($company);
+            
             $company->load(['staff.documents']);
             
             return view('staff.index', compact('company'));
@@ -28,10 +32,14 @@ class StaffController extends Controller
 
     /**
      * Show the form for creating a new resource.
+     * ACTUALIZADO: Verifica que el usuario tenga acceso a la empresa
      */
     public function create(Company $company, Request $request)
     {
         try {
+            // NUEVO: Verificar autorización sobre la empresa
+            $this->authorizeCompanyAccess($company);
+            
             $type = $request->get('type', Staff::TYPE_PROFESSIONAL);
             
             // Validar que el tipo sea válido
@@ -51,17 +59,16 @@ class StaffController extends Controller
 
     /**
      * Store a newly created resource in storage.
+     * ACTUALIZADO: Verifica autorización y usa auth()->id()
      */
     public function store(Request $request, Company $company)
     {
         try {
+            // NUEVO: Verificar autorización sobre la empresa
+            $this->authorizeCompanyAccess($company);
+            
             $validatedData = $request->validate([
                 'type' => 'required|in:professional,clinical',
-                // COMENTAR LOS CAMPOS BÁSICOS TEMPORALMENTE
-                // 'name' => 'required|string|max:255',
-                // 'dni' => 'required|string|max:25',
-                // 'email' => 'nullable|email|max:255',
-                // 'phone' => 'nullable|string|max:50',
                 'documents' => 'nullable',
                 'documents.*' => 'nullable|file|mimes:jpeg,png,pdf|max:4096',
             ]);
@@ -69,11 +76,11 @@ class StaffController extends Controller
             // Crear el personal con datos temporales
             $staff = $company->staff()->create([
                 'type' => $validatedData['type'],
-                'name' => 'Personal ' . ucfirst($validatedData['type']) . ' - Temporal', // Nombre temporal
-                'dni' => 'TEMP-' . time(), // DNI temporal único
+                'name' => 'Personal ' . ucfirst($validatedData['type']) . ' - Temporal',
+                'dni' => 'TEMP-' . time(),
                 'email' => null,
                 'phone' => null,
-                'user_id' => 1,
+                'user_id' => auth()->id(), // 🚀 CAMBIO: Usar usuario autenticado
                 'status' => Staff::STATUS_TRAMITACION,
             ]);
 
@@ -91,10 +98,15 @@ class StaffController extends Controller
 
     /**
      * Display the specified resource.
+     * ACTUALIZADO: Verifica autorización sobre la empresa y el staff
      */
     public function show(Company $company, Staff $staff)
     {
         try {
+            // NUEVO: Verificar autorización
+            $this->authorizeCompanyAccess($company);
+            $this->authorizeStaffAccess($staff, $company);
+            
             $staff->load('documents');
             
             return view('staff.show', compact('company', 'staff'));
@@ -106,10 +118,15 @@ class StaffController extends Controller
 
     /**
      * Show the form for editing the specified resource.
+     * ACTUALIZADO: Verifica autorización sobre la empresa y el staff
      */
     public function edit(Company $company, Staff $staff)
     {
         try {
+            // NUEVO: Verificar autorización
+            $this->authorizeCompanyAccess($company);
+            $this->authorizeStaffAccess($staff, $company);
+            
             $documents = Document::where('category', $staff->type)->active()->orderBy('order')->get();
             $staff->load('documents');
             
@@ -122,23 +139,19 @@ class StaffController extends Controller
 
     /**
      * Update the specified resource in storage.
+     * ACTUALIZADO: Verifica autorización y usa auth()->id()
      */
     public function update(Request $request, Company $company, Staff $staff)
     {
         try {
-            // 🔧 CAMBIO: Solo validar documentos por ahora (campos básicos comentados)
+            // NUEVO: Verificar autorización
+            $this->authorizeCompanyAccess($company);
+            $this->authorizeStaffAccess($staff, $company);
+            
             $validatedData = $request->validate([
-                // CAMPOS BÁSICOS COMENTADOS TEMPORALMENTE
-                // 'name' => 'required|string|max:255',
-                // 'dni' => 'required|string|max:25',
-                // 'email' => 'nullable|email|max:255',
-                // 'phone' => 'nullable|string|max:50',
                 'documents' => 'nullable',
                 'documents.*' => 'nullable|file|mimes:jpeg,png,pdf|max:4096',
             ]);
-
-            // 🔧 CAMBIO: Solo actualizar datos básicos si están presentes en la validación
-            // $staff->update($validatedData);  // COMENTADO porque no hay campos básicos
 
             // Procesar documentos si se subieron
             if ($request->hasFile('documents')) {
@@ -154,10 +167,15 @@ class StaffController extends Controller
 
     /**
      * Remove the specified resource from storage.
+     * ACTUALIZADO: Verifica autorización antes de eliminar
      */
     public function destroy(Company $company, Staff $staff)
     {
         try {
+            // NUEVO: Verificar autorización
+            $this->authorizeCompanyAccess($company);
+            $this->authorizeStaffAccess($staff, $company);
+            
             // Eliminar archivos asociados
             foreach ($staff->documents as $document) {
                 if ($document->pivot->path) {
@@ -179,7 +197,39 @@ class StaffController extends Controller
     }
 
     /**
+     * NUEVO MÉTODO: Verificar que el usuario tenga acceso a la empresa
+     */
+    private function authorizeCompanyAccess(Company $company)
+    {
+        // Admin puede acceder a todo
+        if (auth()->user()->isAdmin()) {
+            return true;
+        }
+        
+        // Usuario normal solo puede acceder a sus propias empresas
+        if ($company->user_id !== auth()->id()) {
+            abort(403, 'No tienes permiso para acceder a esta empresa.');
+        }
+        
+        return true;
+    }
+
+    /**
+     * NUEVO MÉTODO: Verificar que el staff pertenezca a la empresa autorizada
+     */
+    private function authorizeStaffAccess(Staff $staff, Company $company)
+    {
+        // Verificar que el staff pertenezca a la empresa indicada
+        if ($staff->company_id !== $company->id) {
+            abort(404, 'El personal no pertenece a esta empresa.');
+        }
+        
+        return true;
+    }
+
+    /**
      * Procesar documentos del personal
+     * ACTUALIZADO: Usa auth()->id() en lugar de hardcodear user_id = 1
      */
     private function processStaffDocuments(Request $request, Staff $staff)
     {
@@ -209,7 +259,7 @@ class StaffController extends Controller
                         $staff->documents()->updateExistingPivot($documentId, [
                             'path' => $path,
                             'original_file_name' => $file->getClientOriginalName(),
-                            'user_id' => 1,
+                            'user_id' => auth()->id(), // 🚀 CAMBIO: Usar usuario autenticado
                             'updated_at' => now(),
                         ]);
                     } else {
@@ -217,7 +267,7 @@ class StaffController extends Controller
                         $documentsToAttach[$documentId] = [
                             'path' => $path,
                             'original_file_name' => $file->getClientOriginalName(),
-                            'user_id' => 1,
+                            'user_id' => auth()->id(), // 🚀 CAMBIO: Usar usuario autenticado
                             'created_at' => now(),
                             'updated_at' => now(),
                         ];

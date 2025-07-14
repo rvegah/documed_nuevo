@@ -14,14 +14,19 @@ class CompanyController extends Controller
 {
     /**
      * Display a listing of the resource.
-     * ACTUALIZADO: Ahora soporta filtros por estado
+     *  ACTUALIZADO: Ahora filtra por usuario (solo admin ve todo)
      */
     public function index(Request $request)
     {
         try {
             $query = Company::query();
             
-            // NUEVO: Aplicar filtro si existe
+            //  NUEVO: Filtrar por usuario si no es admin
+            if (!auth()->user()->isAdmin()) {
+                $query->where('user_id', auth()->id());
+            }
+            
+            // Aplicar filtro si existe
             if ($request->get('filter')) {
                 $filter = $request->get('filter');
                 switch($filter) {
@@ -43,7 +48,7 @@ class CompanyController extends Controller
                 }
             }
             
-            // 🚀 NUEVO: Ordenar por fecha de creación (más recientes primero)
+            // Ordenar por fecha de creación (más recientes primero)
             $companies = $query->orderBy('created_at', 'desc')->get();
             
             return view('companies.index', compact('companies'));
@@ -65,12 +70,17 @@ class CompanyController extends Controller
 
     /**
      * Store a newly created resource in storage.
+     *  ACTUALIZADO: Usa auth()->id() en lugar de hardcodear user_id = 1
      */
     public function store(StoreCompanyRequest $request)
     {
+        Log::info('=== DEBUG CREACIÓN EMPRESA ===');
+        Log::info('Usuario autenticado ID: ' . (auth()->id() ?? 'NULL'));
+        Log::info('Usuario email: ' . (auth()->user()->email ?? 'NULL'));
+        Log::info('Usuario name: ' . (auth()->user()->name ?? 'NULL'));
         try {
             $validateData = $request->validated();
-            $validateData['user_id'] = 1;
+            $validateData['user_id'] = auth()->id(); //  CAMBIO: Usar usuario autenticado
             $company = Company::create($validateData);
 
             $documentsToAttach = [];
@@ -95,7 +105,7 @@ class CompanyController extends Controller
                             $documentsToAttach[$documentId] = [
                                 'path' => $path,
                                 'original_file_name' => $uploadedFile->getClientOriginalName(),
-                                'user_id' => 1,
+                                'user_id' => auth()->id(), // CAMBIO: Usar usuario autenticado
                                 'created_at' => now(),
                                 'updated_at' => now(),
                             ];
@@ -122,10 +132,14 @@ class CompanyController extends Controller
 
     /**
      * Display the specified resource.
+     *  ACTUALIZADO: Verifica que el usuario tenga acceso a esta empresa
      */
     public function show(Company $company)
     {
         try {
+            //  NUEVO: Verificar autorización
+            $this->authorizeCompanyAccess($company);
+            
             // Cargar documentos relacionados
             $company->load('documents');
             
@@ -138,10 +152,14 @@ class CompanyController extends Controller
 
     /**
      * Show the form for editing the specified resource.
+     *  ACTUALIZADO: Verifica que el usuario tenga acceso a esta empresa
      */
     public function edit(Company $company)
     {
         try {
+            // NUEVO: Verificar autorización
+            $this->authorizeCompanyAccess($company);
+            
             $documents = Document::active()->orderBy('order', 'asc')->get();
             $company->load('documents');
             
@@ -152,12 +170,16 @@ class CompanyController extends Controller
         }
     }
 
-        /**
-         * Update the specified resource in storage.
-         */
+    /**
+     * Update the specified resource in storage.
+     *  ACTUALIZADO: Verifica autorización y usa auth()->id()
+     */
     public function update(Request $request, Company $company)
     {
         try {
+            //  NUEVO: Verificar autorización
+            $this->authorizeCompanyAccess($company);
+            
             // Solo validar campos básicos por ahora
             $validatedData = $request->validate([
                 'company_name' => 'required|string|max:255',
@@ -171,7 +193,7 @@ class CompanyController extends Controller
             // Actualizar datos básicos de la empresa
             $company->update($validatedData);
 
-            // NUEVO: Procesar documentos si se subieron
+            // Procesar documentos si se subieron
             if ($request->hasFile('documents')) {
                 $this->processUploadedDocuments($request, $company);
             }
@@ -184,7 +206,58 @@ class CompanyController extends Controller
     }
 
     /**
-     * NUEVO MÉTODO: Procesar documentos subidos en edición
+     * Remove the specified resource from storage.
+     *  ACTUALIZADO: Verifica autorización antes de eliminar
+     */
+    public function destroy(Company $company)
+    {
+        try {
+            //  NUEVO: Verificar autorización
+            $this->authorizeCompanyAccess($company);
+            
+            // Eliminar archivos asociados si existen
+            if ($company->documents()->count() > 0) {
+                foreach ($company->documents as $document) {
+                    if ($document->pivot->path) {
+                        \Storage::disk('public')->delete($document->pivot->path);
+                    }
+                }
+            }
+            
+            // Eliminar relaciones en la tabla pivot
+            $company->documents()->detach();
+            
+            // Eliminar la empresa
+            $company->delete();
+
+            return redirect()->route('companies.index')->with('success', 'Empresa eliminada exitosamente.');
+        } catch (\Exception $e) {
+            Log::error("Error al eliminar la compañía: " . $e->getMessage());
+            return redirect()->route('companies.index')->with('error', 'No se pudo eliminar la empresa.');
+        }
+    }
+
+    /**
+     *  NUEVO MÉTODO: Verificar que el usuario tenga acceso a la empresa
+     */
+    private function authorizeCompanyAccess(Company $company)
+    {
+        // Admin puede acceder a todo
+        if (auth()->user()->isAdmin()) {
+            return true;
+        }
+        
+        // Usuario normal solo puede acceder a sus propias empresas
+        if ($company->user_id !== auth()->id()) {
+            abort(403, 'No tienes permiso para acceder a esta empresa.');
+        }
+        
+        return true;
+    }
+
+    /**
+     * Procesar documentos subidos en edición
+     * 🚀 ACTUALIZADO: Usa auth()->id() en lugar de hardcodear user_id = 1
      */
     private function processUploadedDocuments(Request $request, Company $company)
     {
@@ -216,7 +289,7 @@ class CompanyController extends Controller
                         $company->documents()->updateExistingPivot($documentId, [
                             'path' => $path,
                             'original_file_name' => $file->getClientOriginalName(),
-                            'user_id' => 1, // Cambiar por auth()->id() cuando tengas autenticación
+                            'user_id' => auth()->id(), // CAMBIO: Usar usuario autenticado
                             'updated_at' => now(),
                         ]);
                     } else {
@@ -224,7 +297,7 @@ class CompanyController extends Controller
                         $documentsToAttach[$documentId] = [
                             'path' => $path,
                             'original_file_name' => $file->getClientOriginalName(),
-                            'user_id' => 1, // Cambiar por auth()->id() cuando tengas autenticación
+                            'user_id' => auth()->id(), // CAMBIO: Usar usuario autenticado
                             'created_at' => now(),
                             'updated_at' => now(),
                         ];
@@ -236,34 +309,6 @@ class CompanyController extends Controller
         // Adjuntar documentos nuevos si los hay
         if (!empty($documentsToAttach)) {
             $company->documents()->attach($documentsToAttach);
-        }
-    }
-
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(Company $company)
-    {
-        try {
-            // Eliminar archivos asociados si existen
-            if ($company->documents()->count() > 0) {
-                foreach ($company->documents as $document) {
-                    if ($document->pivot->path) {
-                        \Storage::disk('public')->delete($document->pivot->path);
-                    }
-                }
-            }
-            
-            // Eliminar relaciones en la tabla pivot
-            $company->documents()->detach();
-            
-            // Eliminar la empresa
-            $company->delete();
-
-            return redirect()->route('companies.index')->with('success', 'Empresa eliminada exitosamente.');
-        } catch (\Exception $e) {
-            Log::error("Error al eliminar la compañía: " . $e->getMessage());
-            return redirect()->route('companies.index')->with('error', 'No se pudo eliminar la empresa.');
         }
     }
 }

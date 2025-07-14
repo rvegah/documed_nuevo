@@ -6,11 +6,12 @@ use App\Http\Controllers\StaffController;
 use App\Http\Controllers\DocumentApprovalController;
 use Illuminate\Support\Facades\Route;
 
-// 🚀 RUTAS DE BREEZE (autenticación)
+// RUTA RAÍZ - Redirige al login si no está autenticado, al dashboard si está autenticado
 Route::get('/', function () {
-    return view('welcome');
+    return auth()->check() ? redirect()->route('dashboard') : redirect()->route('login');
 });
 
+// RUTAS DE DASHBOARD
 Route::get('/dashboard', function () {
     return view('dashboard');
 })->middleware(['auth', 'verified'])->name('dashboard');
@@ -23,10 +24,10 @@ Route::middleware('auth')->group(function () {
 
 require __DIR__.'/auth.php';
 
-// 🚀 TUS RUTAS ORIGINALES RESTAURADAS
-Route::get('/home', function () {
-    return view('welcome');
-})->name('home');
+// TUS RUTAS ORIGINALES RESTAURADAS
+Route::get('/', function () {
+    return auth()->check() ? redirect()->route('dashboard') : redirect()->route('login');
+});
 
 Route::get('/companies/wizard', function () {
     return view('companies.wizard');
@@ -36,16 +37,16 @@ Route::get('/test-livewire', function () {
     return view('test-livewire');
 });
 
-// 🚀 RUTAS DE EMPRESAS
+// RUTAS DE EMPRESAS
 Route::resource('companies', CompanyController::class);
 
-// 🚀 RUTAS DE STAFF
+// RUTAS DE STAFF
 Route::prefix('companies/{company}')->group(function () {
     Route::resource('staff', StaffController::class);
 });
 
-// 🚀 RUTAS DEL PANEL DE APROBACIÓN (PROTEGIDAS CON AUTH)
-Route::prefix('admin')->middleware('auth')->group(function () {
+// RUTAS DEL PANEL DE APROBACIÓN (PROTEGIDAS CON AUTH)
+Route::prefix('admin')->middleware(['auth', 'admin'])->group(function () {
     
     // Panel principal de aprobación
     Route::get('/document-approval', [DocumentApprovalController::class, 'index'])

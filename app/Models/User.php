@@ -12,7 +12,7 @@ class User extends Authenticatable
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasFactory, Notifiable;
 
-    // 🚀 CONSTANTES DE ROLES
+    //  CONSTANTES DE ROLES
     const ROLE_ADMIN = 'admin';
     const ROLE_USER = 'user';
 
@@ -25,7 +25,7 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
-        'role', // 🚀 AGREGADO
+        'role', // AGREGADO
     ];
 
     /**
@@ -51,7 +51,7 @@ class User extends Authenticatable
         ];
     }
 
-    // 🚀 MÉTODOS PARA VERIFICAR ROLES
+    // MÉTODOS PARA VERIFICAR ROLES
     public function isAdmin(): bool
     {
         return $this->role === self::ROLE_ADMIN;
@@ -62,7 +62,7 @@ class User extends Authenticatable
         return $this->role === self::ROLE_USER;
     }
 
-    // 🚀 ACCESSOR PARA MOSTRAR EL NOMBRE DEL ROL EN ESPAÑOL
+    // ACCESSOR PARA MOSTRAR EL NOMBRE DEL ROL EN ESPAÑOL
     public function getRoleNameAttribute(): string
     {
         return match($this->role) {

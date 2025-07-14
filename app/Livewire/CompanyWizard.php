@@ -111,7 +111,7 @@ class CompanyWizard extends Component
             'company_name' => $this->company_name,
             'legal_representative_dni' => $this->legal_representative_dni,
             'rn_owner' => $this->rn_owner,
-            'user_id' => 1, // Temporal - aquí irá el usuario autenticado
+            'user_id' => auth()->id(), // Temporal - aquí irá el usuario autenticado
             'status' => 'Tramitación',
         ];
 
@@ -147,7 +147,7 @@ class CompanyWizard extends Component
                     $documentsToAttach[$documentId] = [
                         'path' => $path,
                         'original_file_name' => $file->getClientOriginalName(),
-                        'user_id' => 1,
+                        'user_id' => auth()->id(),
                         'created_at' => now(),
                         'updated_at' => now(),
                     ];

@@ -166,10 +166,10 @@
                     </div>
                     <div class="card-body">
                         <ul class="small mb-0">
-                            <li>Puedes subir documentos ahora o más tarde</li>
-                            <li>Los documentos marcados como "Requerido" son obligatorios</li>
-                            <li>Formatos soportados: PDF, JPG, PNG</li>
-                            <li>Tamaño máximo: 4MB por archivo</li>
+                            <li>Puedes subir documentos ahora o más tarde.</li>
+                            <li>Los documentos marcados como "Requerido" son obligatorios.</li>
+                            <li>Formatos soportados: PDF, JPG, PNG.</li>
+                            <li>Tamaño máximo: 4MB por archivo.</li>
                         </ul>
                     </div>
                 </div>

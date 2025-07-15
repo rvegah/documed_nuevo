@@ -186,10 +186,10 @@
                                 <div class="card-body">
                                     <p>Como administrador, tienes acceso completo al sistema de DocuMed:</p>
                                     <ul>
-                                        <li>Gestión de todas las empresas</li>
-                                        <li>Aprobación/rechazo de documentos</li>
-                                        <li>Supervisión del personal</li>
-                                        <li>Reportes y estadísticas</li>
+                                        <li>Gestión de todas las empresas.</li>
+                                        <li>Aprobación/rechazo de documentos.</li>
+                                        <li>Supervisión del personal.</li>
+                                        <li>Reportes y estadísticas.</li>
                                     </ul>
                                     @if($totalPending > 0)
                                         <div class="alert alert-warning">

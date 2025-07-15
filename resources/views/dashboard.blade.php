@@ -184,7 +184,7 @@
                                     <h5 class="mb-0"><i class="fas fa-shield-alt"></i> Panel Administrativo</h5>
                                 </div>
                                 <div class="card-body">
-                                    <p>Como administrador, tienes acceso completo al sistema:</p>
+                                    <p>Como administrador, tienes acceso completo al sistema de DocuMed:</p>
                                     <ul>
                                         <li>Gestión de todas las empresas</li>
                                         <li>Aprobación/rechazo de documentos</li>

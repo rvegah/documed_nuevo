@@ -74,3 +74,14 @@ Route::prefix('admin')->middleware(['auth', 'admin'])->group(function () {
     Route::post('/document-approval/staff/{staff}/document/{document}/reject', [DocumentApprovalController::class, 'rejectStaffDocument'])
         ->name('admin.document-approval.staff.reject');
 });
+
+// RUTAS DE DESCARGA DE DOCUMENTOS
+Route::middleware('auth')->group(function () {
+    // Descargar documento individual
+    Route::get('/companies/{company}/documents/{document}/download', [CompanyController::class, 'downloadDocument'])
+        ->name('companies.documents.download');
+    
+    // Descargar todos los documentos en ZIP
+    Route::get('/companies/{company}/documents/download-all', [CompanyController::class, 'downloadAllDocuments'])
+        ->name('companies.documents.download-all');
+});

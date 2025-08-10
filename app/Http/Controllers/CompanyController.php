@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
+
 class CompanyController extends Controller
 {
     /**
@@ -105,7 +106,8 @@ class CompanyController extends Controller
                             $documentsToAttach[$documentId] = [
                                 'path' => $path,
                                 'original_file_name' => $uploadedFile->getClientOriginalName(),
-                                'user_id' => auth()->id(), // CAMBIO: Usar usuario autenticado
+                                'user_id' => auth()->id(),
+                                'file_index' => 1, // Los documentos en creación siempre empiezan con index 1
                                 'created_at' => now(),
                                 'updated_at' => now(),
                             ];
@@ -186,8 +188,8 @@ class CompanyController extends Controller
                 'legal_representative_dni' => 'required|string|max:25',
                 'rn_owner' => 'required|string|max:250',
                 'has_center_staff' => 'boolean',
-                'documents' => 'nullable',
-                'documents.*' => 'nullable|file|mimes:jpeg,png,pdf|max:4096',
+                'documents.*' => 'nullable',
+                'documents.*.*' => 'nullable|file|mimes:jpeg,png,pdf|max:4096',
             ]);
 
             // Actualizar datos básicos de la empresa
@@ -257,58 +259,299 @@ class CompanyController extends Controller
 
     /**
      * Procesar documentos subidos en edición
-     * 🚀 ACTUALIZADO: Usa auth()->id() en lugar de hardcodear user_id = 1
+     * 🚀 ACTUALIZADO: Soporte para múltiples archivos en documentos específicos
      */
     private function processUploadedDocuments(Request $request, Company $company)
     {
         $documentsToAttach = [];
         
-        foreach ($request->file('documents') as $documentId => $file) {
-            if ($file) {
+        foreach ($request->file('documents') as $documentId => $files) {
+            if ($files) {
                 $document = Document::find($documentId);
                 if ($document) {
-                    // Generar nombre seguro para el archivo
-                    $safeName = 'doc_' . $documentId . '_' . time() . '.' . $file->getClientOriginalExtension();
+                    // Verificar si es un documento de múltiples archivos
+                    $isMultiple = $company->isMultipleFileDocument($documentId);
                     
-                    // Guardar en la carpeta de la empresa
-                    $path = $file->storeAs(
-                        'company_documents/' . $company->id,
-                        $safeName,
-                        'public'
-                    );
-
-                    // Si ya existe este documento, lo reemplazamos
-                    if ($company->documents->contains($documentId)) {
-                        // Eliminar el archivo anterior si existe
-                        $existingDocument = $company->documents->find($documentId);
-                        if ($existingDocument && $existingDocument->pivot->path) {
-                            \Storage::disk('public')->delete($existingDocument->pivot->path);
-                        }
+                    if ($isMultiple && is_array($files)) {
+                        \Log::info("=== PROCESANDO COMO MÚLTIPLE ===");
+                        \Log::info("Documento {$documentId} - es múltiple: SÍ");
+                        \Log::info("Files es array: SÍ");
+                        \Log::info("Cantidad de archivos: " . count($files));
                         
-                        // Actualizar el registro existente
-                        $company->documents()->updateExistingPivot($documentId, [
-                            'path' => $path,
-                            'original_file_name' => $file->getClientOriginalName(),
-                            'user_id' => auth()->id(), // CAMBIO: Usar usuario autenticado
-                            'updated_at' => now(),
-                        ]);
+                        // ✅ AGREGAR: Obtener el siguiente índice disponible
+                        $existingFiles = $company->getDocumentFiles($documentId);
+                        $nextIndex = $existingFiles->count() > 0 ? $existingFiles->max('file_index') + 1 : 1;
+                        \Log::info("Documento {$documentId}: {$existingFiles->count()} archivos existentes, siguiente índice: {$nextIndex}");
+                        
+                        // DOCUMENTO MÚLTIPLE: Procesar array de archivos
+                        $this->processMultipleFiles($files, $documentId, $company, $documentsToAttach, $nextIndex);
+                        
+                        \Log::info("Después de processMultipleFiles, total documentos: " . count($documentsToAttach));
                     } else {
-                        // Crear nuevo registro
-                        $documentsToAttach[$documentId] = [
-                            'path' => $path,
-                            'original_file_name' => $file->getClientOriginalName(),
-                            'user_id' => auth()->id(), // CAMBIO: Usar usuario autenticado
-                            'created_at' => now(),
-                            'updated_at' => now(),
-                        ];
+                        \Log::info("=== PROCESANDO COMO ÚNICO ===");
+                        \Log::info("Documento {$documentId} - es múltiple: " . ($isMultiple ? 'SÍ' : 'NO'));
+                        \Log::info("Files es array: " . (is_array($files) ? 'SÍ' : 'NO'));
+                        
+                        // DOCUMENTO ÚNICO: Lógica original
+                        $file = is_array($files) ? $files[0] : $files;
+                        $this->processSingleFile($file, $documentId, $company, $documentsToAttach);
                     }
                 }
             }
         }
 
-        // Adjuntar documentos nuevos si los hay
+        // ✅ CAMBIO IMPORTANTE: Usar INSERT directo para múltiples archivos
+        \Log::info('Documentos a insertar:', $documentsToAttach);
+
         if (!empty($documentsToAttach)) {
-            $company->documents()->attach($documentsToAttach);
+            \Log::info('Insertando ' . count($documentsToAttach) . ' documentos');
+            \DB::table('company_document')->insert($documentsToAttach);
+            \Log::info('Documentos insertados exitosamente');
+        } else {
+            \Log::info('No hay documentos para insertar');
+        }
+    }
+
+    /**
+     * Procesar múltiples archivos para un documento
+     */
+/**
+ * Procesar múltiples archivos para un documento
+ */
+    private function processMultipleFiles($files, $documentId, $company, &$documentsToAttach, $startIndex = 1)
+    {
+        \Log::info("=== PROCESANDO MÚLTIPLES ARCHIVOS ===");
+        \Log::info("Documento ID: {$documentId}");
+        \Log::info("Índice inicial: {$startIndex}");
+        \Log::info("Cantidad de archivos recibidos: " . count($files));
+        
+        $fileIndex = $startIndex;
+        
+        foreach ($files as $index => $file) {
+            \Log::info("Procesando archivo #{$index}");
+            
+            if ($file && $file->isValid()) {
+                \Log::info("Archivo válido: " . $file->getClientOriginalName());
+                
+                // Verificar límite de 6 archivos total
+                if ($fileIndex > 6) {
+                    \Log::info("Límite de 6 archivos alcanzado, saltando archivo");
+                    break;
+                }
+                
+                // Generar nombre seguro
+                $safeName = 'doc_' . $documentId . '_' . $fileIndex . '_' . time() . '.' . $file->getClientOriginalExtension();
+                \Log::info("Nombre de archivo generado: {$safeName}");
+                
+                // Guardar archivo
+                $path = $file->storeAs(
+                    'company_documents/' . $company->id,
+                    $safeName,
+                    'public'
+                );
+                \Log::info("Archivo guardado en: {$path}");
+
+                // Preparar datos para insert
+                $fileData = [
+                    'company_id' => $company->id,
+                    'document_id' => $documentId,
+                    'file_index' => $fileIndex,
+                    'path' => $path,
+                    'original_file_name' => $file->getClientOriginalName(),
+                    'user_id' => auth()->id(),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
+                
+                $documentsToAttach[] = $fileData;
+                \Log::info("Archivo agregado al array, fileIndex: {$fileIndex}");
+                \Log::info("Total documentos en array ahora: " . count($documentsToAttach));
+                
+                $fileIndex++;
+            } else {
+                \Log::warning("Archivo inválido en índice {$index}");
+            }
+        }
+        
+        \Log::info("=== FIN PROCESAMIENTO MÚLTIPLES ARCHIVOS ===");
+        \Log::info("Total archivos procesados: " . (count($documentsToAttach)));
+    }
+
+    /**
+     * Procesar un solo archivo (lógica original)
+     */
+    private function processSingleFile($file, $documentId, $company, &$documentsToAttach)
+    {
+        if ($file && $file->isValid()) {
+            // Generar nombre seguro para el archivo
+            $safeName = 'doc_' . $documentId . '_' . time() . '.' . $file->getClientOriginalExtension();
+            
+            // Guardar en la carpeta de la empresa
+            $path = $file->storeAs(
+                'company_documents/' . $company->id,
+                $safeName,
+                'public'
+            );
+
+            // Si ya existe este documento, lo reemplazamos
+            if ($company->documents->contains($documentId)) {
+                // Eliminar el archivo anterior si existe
+                $existingDocument = $company->documents->find($documentId);
+                if ($existingDocument && $existingDocument->pivot->path) {
+                    \Storage::disk('public')->delete($existingDocument->pivot->path);
+                }
+                
+                // Actualizar el registro existente
+                $company->documents()->updateExistingPivot($documentId, [
+                    'path' => $path,
+                    'original_file_name' => $file->getClientOriginalName(),
+                    'user_id' => auth()->id(),
+                    'updated_at' => now(),
+                ]);
+            } else {
+                // Crear nuevo registro
+                $documentsToAttach[] = [
+                    'company_id' => $company->id,
+                    'document_id' => $documentId,
+                    'file_index' => 1, // Los documentos únicos siempre tienen file_index = 1
+                    'path' => $path,
+                    'original_file_name' => $file->getClientOriginalName(),
+                    'user_id' => auth()->id(),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
+            }
+        }
+    }
+
+    /**
+     * Descargar un documento individual de la empresa
+     */
+    public function downloadDocument(Company $company, Document $document)
+    {
+        try {
+            // Verificar autorización
+            $this->authorizeCompanyAccess($company);
+            
+            // Verificar que el documento esté asociado a la empresa
+            $companyDocument = $company->documents()->where('document_id', $document->id)->first();
+            
+            if (!$companyDocument || !$companyDocument->pivot->path) {
+                return redirect()->back()->with('error', 'El documento no existe o no está disponible.');
+            }
+            
+            $filePath = storage_path('app/public/' . $companyDocument->pivot->path);
+            
+            if (!file_exists($filePath)) {
+                return redirect()->back()->with('error', 'El archivo no se encuentra en el servidor.');
+            }
+            
+            // Descargar con el nombre original
+            return response()->download($filePath, $companyDocument->pivot->original_file_name);
+            
+        } catch (\Exception $e) {
+            Log::error("Error al descargar documento: " . $e->getMessage());
+            return redirect()->back()->with('error', 'No se pudo descargar el documento.');
+        }
+    }
+
+    /**
+     * Descargar todos los documentos de la empresa en un ZIP
+     */
+    public function downloadAllDocuments(Company $company)
+    {
+        try {
+            // Verificar autorización
+            $this->authorizeCompanyAccess($company);
+            
+            // Verificar que la empresa tenga documentos
+            if ($company->documents()->count() == 0) {
+                return redirect()->back()->with('error', 'Esta empresa no tiene documentos para descargar.');
+            }
+            
+            // Crear un nombre único para el archivo ZIP
+            $zipName = 'Documentos_' . Str::slug($company->company_name) . '_' . date('Y-m-d') . '.zip';
+            $zipPath = storage_path('app/temp/' . $zipName);
+            
+            // Crear directorio temporal si no existe
+            if (!file_exists(storage_path('app/temp'))) {
+                mkdir(storage_path('app/temp'), 0755, true);
+            }
+            
+            // Crear el archivo ZIP
+            $zip = new \ZipArchive();
+            
+            if ($zip->open($zipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== TRUE) {
+                return redirect()->back()->with('error', 'No se pudo crear el archivo ZIP.');
+            }
+            
+            $addedFiles = 0;
+            
+            // Agregar documentos de la empresa al ZIP
+            foreach ($company->documents as $document) {
+                if ($document->pivot->path) {
+                    $filePath = storage_path('app/public/' . $document->pivot->path);
+                    
+                    if (file_exists($filePath)) {
+                        // Usar el nombre original del archivo
+                        $fileName = $document->pivot->original_file_name ?: $document->name;
+                        
+                        // Agregar prefijo para organizar
+                        $zipFileName = '1_Empresa/' . $fileName;
+                        
+                        $zip->addFile($filePath, $zipFileName);
+                        $addedFiles++;
+                    }
+                }
+            }
+            
+            // Agregar documentos del personal si existe
+            if ($company->staff()->count() > 0) {
+                foreach ($company->staff as $staff) {
+                    if ($staff->documents()->count() > 0) {
+                        foreach ($staff->documents as $document) {
+                            if ($document->pivot->path) {
+                                $filePath = storage_path('app/public/' . $document->pivot->path);
+                                
+                                if (file_exists($filePath)) {
+                                    $fileName = $document->pivot->original_file_name ?: $document->name;
+                                    
+                                    // Organizar por tipo de personal
+                                    $staffType = $staff->type == 'professional' ? 'Profesionales' : 'Personal_Clinico';
+                                    $zipFileName = "2_{$staffType}/{$staff->name}/" . $fileName;
+                                    
+                                    $zip->addFile($filePath, $zipFileName);
+                                    $addedFiles++;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            $zip->close();
+            
+            if ($addedFiles == 0) {
+                // Eliminar ZIP vacío
+                if (file_exists($zipPath)) {
+                    unlink($zipPath);
+                }
+                return redirect()->back()->with('error', 'No hay archivos válidos para descargar.');
+            }
+            
+            // Programar eliminación del archivo temporal después de descarga
+            register_shutdown_function(function() use ($zipPath) {
+                if (file_exists($zipPath)) {
+                    unlink($zipPath);
+                }
+            });
+            
+            // Descargar el ZIP
+            return response()->download($zipPath, $zipName)->deleteFileAfterSend(true);
+            
+        } catch (\Exception $e) {
+            Log::error("Error al crear ZIP de documentos: " . $e->getMessage());
+            return redirect()->back()->with('error', 'No se pudo crear el archivo ZIP: ' . $e->getMessage());
         }
     }
 }

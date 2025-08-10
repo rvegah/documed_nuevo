@@ -51,7 +51,7 @@ class Company extends Model
     public function documents(): BelongsToMany
     {
         return $this->belongsToMany(Document::class)
-            ->withPivot('path', 'original_file_name', 'valid', 'valid_date', 'valid_user_id', 'comments', 'user_id')
+            ->withPivot('path', 'original_file_name', 'valid', 'valid_date', 'valid_user_id', 'comments', 'user_id', 'file_index')
             ->withTimestamps();
     }
 
@@ -74,5 +74,34 @@ class Company extends Model
     public function getUrlDocumentsAttribute(): string
     {
         return "company_documents/{$this->id}";
+    }
+
+    /**
+     * Obtener todos los archivos de un documento específico (para documentos múltiples)
+     */
+    public function getDocumentFiles($documentId)
+    {
+        return $this->documents()
+            ->where('document_id', $documentId)
+            ->get()
+            ->map(function ($document) {
+                return (object) [
+                    'file_index' => $document->pivot->file_index,
+                    'path' => $document->pivot->path,
+                    'original_file_name' => $document->pivot->original_file_name,
+                    'created_at' => $document->pivot->created_at,
+                    'pivot' => $document->pivot
+                ];
+            })
+            ->sortBy('file_index');
+    }
+
+    /**
+     * Verificar si un documento permite múltiples archivos
+     */
+    public function isMultipleFileDocument($documentId)
+    {
+        // Solo "Contratos de Mantenimiento" (ID: 45) permite múltiples archivos
+        return $documentId == 45;
     }
 }

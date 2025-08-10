@@ -87,10 +87,27 @@
     <!-- Documentos -->
     @if($company->documents->count() > 0)
         <div class="card mt-4">
-            <div class="card-header">
-                <h5><i class="fas fa-file-alt"></i> Documentos Subidos ({{ $company->documents->count() }})</h5>
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-file-alt"></i> Documentos Subidos ({{ $company->documents->count() }})
+                </h5>
+                <!-- BOTÓN NUEVO: Descargar Todo en ZIP -->
+                <div>
+                    <a href="{{ route('companies.documents.download-all', $company) }}" 
+                    class="btn btn-success btn-sm">
+                        <i class="fas fa-download"></i>
+                        <i class="fas fa-file-archive"></i>
+                        Descargar Todo ZIP
+                    </a>
+                </div>
             </div>
             <div class="card-body">
+                <!-- Información del ZIP -->
+                <div class="alert alert-info mb-3">
+                    <i class="fas fa-info-circle"></i>
+                    <strong>Descarga Completa:</strong> El botón "Descargar Todo ZIP" incluye todos los documentos de la empresa y su personal organizados en carpetas.
+                </div>
+                
                 <div class="row">
                     @foreach($company->documents as $document)
                         <div class="col-md-6 mb-3">
@@ -104,10 +121,17 @@
                                         </small>
                                     </p>
                                     @if($document->pivot->path)
-                                        <a href="{{ Storage::url($document->pivot->path) }}" 
-                                           target="_blank" 
-                                           class="btn btn-sm btn-outline-primary">
+                                        <!-- BOTÓN MODIFICADO: Ahora usa la ruta controlada -->
+                                        <a href="{{ route('companies.documents.download', [$company, $document]) }}" 
+                                        class="btn btn-sm btn-outline-primary">
                                             <i class="fas fa-download"></i> Descargar
+                                        </a>
+                                        
+                                        <!-- Botón adicional para ver en navegador -->
+                                        <a href="{{ Storage::url($document->pivot->path) }}" 
+                                        target="_blank" 
+                                        class="btn btn-sm btn-outline-secondary">
+                                            <i class="fas fa-eye"></i> Ver
                                         </a>
                                     @endif
                                 </div>
@@ -115,6 +139,13 @@
                         </div>
                     @endforeach
                 </div>
+                
+                @if($company->staff()->count() > 0)
+                    <div class="alert alert-success mt-3">
+                        <i class="fas fa-users"></i>
+                        <strong>Documentos del Personal:</strong> Esta empresa tiene {{ $company->staff()->count() }} personas registradas con documentos adicionales que también se incluirán en el ZIP.
+                    </div>
+                @endif
             </div>
         </div>
     @else

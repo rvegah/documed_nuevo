@@ -113,42 +113,110 @@
                                     <!-- Lista de documentos con subida de archivos -->
                                     <div class="row">
                                         @foreach($basicDocuments as $document)
+                                            @php
+                                                $isMultipleFile = $this->isMultipleFileDocument($document->id);
+                                            @endphp
+                                            
                                             <div class="col-md-6 mb-3">
-                                                <div class="card">
+                                                <div class="card {{ $isMultipleFile ? 'border-primary' : '' }}">
                                                     <div class="card-body">
-                                                        <h6 class="card-title">{{ $document->name }}</h6>
+                                                        <h6 class="card-title">
+                                                            {{ $document->name }}
+                                                            @if($isMultipleFile)
+                                                                <span class="badge bg-primary">Múltiples archivos</span>
+                                                            @endif
+                                                        </h6>
                                                         <p class="card-text text-muted small">
                                                             @if($document->required)
                                                                 <span class="badge bg-danger">Requerido</span>
                                                             @else
                                                                 <span class="badge bg-secondary">Opcional</span>
                                                             @endif
+                                                            @if($isMultipleFile)
+                                                                <span class="badge bg-info">Hasta 6 archivos</span>
+                                                            @endif
                                                         </p>
                                                         
-                                                        <!-- Input para subir archivo -->
-                                                        <div class="mb-2">
-                                                            <input type="file" 
-                                                                   class="form-control form-control-sm"
-                                                                   wire:model="uploadedFiles.{{ $document->id }}"
-                                                                   accept=".pdf,.jpg,.jpeg,.png"
-                                                                   id="file_{{ $document->id }}">
-                                                        </div>
-                                                        
-                                                        <!-- Mostrar progreso de subida -->
-                                                        <div wire:loading wire:target="uploadedFiles.{{ $document->id }}">
-                                                            <div class="progress" style="height: 10px;">
-                                                                <div class="progress-bar progress-bar-striped progress-bar-animated" 
-                                                                     role="progressbar" style="width: 100%"></div>
+                                                        @if($isMultipleFile)
+                                                            {{-- DOCUMENTO CON MÚLTIPLES ARCHIVOS --}}
+                                                            <div class="multiple-files-section" id="multiple-{{ $document->id }}">
+                                                                <div class="file-inputs-container">
+                                                                    <!-- Primer input siempre visible -->
+                                                                    <div class="input-group mb-2">
+                                                                        <input type="file" 
+                                                                            class="form-control form-control-sm"
+                                                                            wire:model="uploadedFiles.{{ $document->id }}.0"
+                                                                            accept=".pdf,.jpg,.jpeg,.png"
+                                                                            id="file_{{ $document->id }}_0">
+                                                                    </div>
+                                                                    
+                                                                    <!-- Inputs adicionales (se mostrarán dinámicamente) -->
+                                                                    @for($i = 1; $i < 6; $i++)
+                                                                        <div class="input-group mb-2" style="display: none;" id="file-group-{{ $document->id }}-{{ $i }}">
+                                                                            <input type="file" 
+                                                                                class="form-control form-control-sm"
+                                                                                wire:model="uploadedFiles.{{ $document->id }}.{{ $i }}"
+                                                                                accept=".pdf,.jpg,.jpeg,.png"
+                                                                                id="file_{{ $document->id }}_{{ $i }}">
+                                                                            <button type="button" 
+                                                                                    class="btn btn-outline-danger btn-sm"
+                                                                                    onclick="removeWizardFileInput({{ $document->id }}, {{ $i }})"
+                                                                                    title="Eliminar este campo">
+                                                                                <i class="fas fa-trash"></i>
+                                                                            </button>
+                                                                        </div>
+                                                                    @endfor
+                                                                </div>
+                                                                
+                                                                <button type="button" 
+                                                                        class="btn btn-sm btn-outline-primary"
+                                                                        onclick="addWizardFileInput({{ $document->id }})"
+                                                                        id="add-btn-{{ $document->id }}">
+                                                                    <i class="fas fa-plus"></i> Agregar otro archivo
+                                                                </button>
                                                             </div>
-                                                            <small class="text-muted">Subiendo archivo...</small>
-                                                        </div>
-                                                        
-                                                        <!-- Mostrar archivo seleccionado -->
-                                                        @if(isset($uploadedFiles[$document->id]))
-                                                            <div class="alert alert-success py-2 mt-2">
-                                                                <i class="fas fa-check-circle"></i>
-                                                                <small>Archivo seleccionado: {{ $uploadedFiles[$document->id]->getClientOriginalName() }}</small>
+                                                            
+                                                            <!-- Mostrar archivos seleccionados para múltiples -->
+                                                            @if(isset($uploadedFiles[$document->id]) && is_array($uploadedFiles[$document->id]))
+                                                                <div class="mt-2">
+                                                                    @foreach($uploadedFiles[$document->id] as $index => $file)
+                                                                        @if($file)
+                                                                            <div class="alert alert-success py-1 mt-1">
+                                                                                <i class="fas fa-check-circle"></i>
+                                                                                <small>Archivo {{ $index + 1 }}: {{ $file->getClientOriginalName() }}</small>
+                                                                            </div>
+                                                                        @endif
+                                                                    @endforeach
+                                                                </div>
+                                                            @endif
+                                                            
+                                                        @else
+                                                            {{-- DOCUMENTO ÚNICO (lógica original) --}}
+                                                            <!-- Input para subir archivo -->
+                                                            <div class="mb-2">
+                                                                <input type="file" 
+                                                                    class="form-control form-control-sm"
+                                                                    wire:model="uploadedFiles.{{ $document->id }}"
+                                                                    accept=".pdf,.jpg,.jpeg,.png"
+                                                                    id="file_{{ $document->id }}">
                                                             </div>
+                                                            
+                                                            <!-- Mostrar progreso de subida -->
+                                                            <div wire:loading wire:target="uploadedFiles.{{ $document->id }}">
+                                                                <div class="progress" style="height: 10px;">
+                                                                    <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                                                        role="progressbar" style="width: 100%"></div>
+                                                                </div>
+                                                                <small class="text-muted">Subiendo archivo...</small>
+                                                            </div>
+                                                            
+                                                            <!-- Mostrar archivo seleccionado -->
+                                                            @if(isset($uploadedFiles[$document->id]) && !is_array($uploadedFiles[$document->id]))
+                                                                <div class="alert alert-success py-2 mt-2">
+                                                                    <i class="fas fa-check-circle"></i>
+                                                                    <small>Archivo seleccionado: {{ $uploadedFiles[$document->id]->getClientOriginalName() }}</small>
+                                                                </div>
+                                                            @endif
                                                         @endif
                                                     </div>
                                                 </div>
@@ -161,7 +229,7 @@
                                         <strong>Nota:</strong> Formatos permitidos: PDF, JPG, JPEG, PNG. Tamaño máximo: 4MB por archivo.
                                     </div>
                                 </div>
-
+                                
                             @elseif($currentStep == 3)
                                 <!-- PASO 3: Revisión Final -->
                                 <div class="step3-content">
@@ -192,14 +260,38 @@
                                                 <h5><i class="fas fa-file-alt"></i> Documentos a Subir</h5>
                                             </div>
                                             <div class="card-body">
-                                                @foreach($uploadedFiles as $documentId => $file)
-                                                    @if($file)
+                                                @foreach($uploadedFiles as $documentId => $files)
+                                                    @if($files)
                                                         @php
                                                             $document = $basicDocuments->find($documentId);
+                                                            $isMultiple = $this->isMultipleFileDocument($documentId);
                                                         @endphp
-                                                        <div class="d-flex justify-content-between align-items-center mb-2">
-                                                            <span>{{ $document->name ?? 'Documento desconocido' }}</span>
-                                                            <span class="badge bg-success">{{ $file->getClientOriginalName() }}</span>
+                                                        
+                                                        <div class="mb-2">
+                                                            <strong>{{ $document->name ?? 'Documento desconocido' }}</strong>
+                                                            
+                                                            @if($isMultiple && is_array($files))
+                                                                {{-- MÚLTIPLES ARCHIVOS --}}
+                                                                <div class="mt-1">
+                                                                    @foreach($files as $index => $file)
+                                                                        @if($file)
+                                                                            <div class="badge bg-success me-1 mb-1">
+                                                                                Archivo {{ $index + 1 }}: {{ $file->getClientOriginalName() }}
+                                                                            </div>
+                                                                        @endif
+                                                                    @endforeach
+                                                                </div>
+                                                            @else
+                                                                {{-- ARCHIVO ÚNICO --}}
+                                                                @php
+                                                                    $file = is_array($files) ? $files[0] : $files;
+                                                                @endphp
+                                                                @if($file)
+                                                                    <div class="badge bg-success">
+                                                                        {{ $file->getClientOriginalName() }}
+                                                                    </div>
+                                                                @endif
+                                                            @endif
                                                         </div>
                                                     @endif
                                                 @endforeach
@@ -282,4 +374,82 @@
         font-weight: 500;
     }
     </style>
+
+    <script>
+                                    // Variables globales
+                                    window.fileCounters = window.fileCounters || {};
+                                    
+                                    // Función para agregar input de archivo
+                                    window.addWizardFileInput = function(documentId) {
+                                        console.log('Intentando agregar archivo para documento:', documentId);
+                                        
+                                        if (!window.fileCounters[documentId]) {
+                                            window.fileCounters[documentId] = 1;
+                                        }
+                                        
+                                        if (window.fileCounters[documentId] >= 6) {
+                                            alert('Máximo 6 archivos permitidos.');
+                                            return;
+                                        }
+                                        
+                                        // Buscar el siguiente input oculto
+                                        const nextInput = document.getElementById(`file-group-${documentId}-${window.fileCounters[documentId]}`);
+                                        console.log('Buscando elemento:', `file-group-${documentId}-${window.fileCounters[documentId]}`, nextInput);
+                                        
+                                        if (nextInput) {
+                                            nextInput.style.display = 'flex';
+                                            window.fileCounters[documentId]++;
+                                            console.log('Archivo agregado. Contador ahora:', window.fileCounters[documentId]);
+                                            
+                                            // Ocultar botón si llegamos al límite
+                                            if (window.fileCounters[documentId] >= 6) {
+                                                const addBtn = document.getElementById(`add-btn-${documentId}`);
+                                                if (addBtn) addBtn.style.display = 'none';
+                                            }
+                                        } else {
+                                            console.error('No se encontró el elemento:', `file-group-${documentId}-${window.fileCounters[documentId]}`);
+                                        }
+                                    };
+                                    
+                                    // Función para remover input de archivo
+                                    window.removeWizardFileInput = function(documentId, index) {
+                                        console.log('Removiendo archivo:', documentId, index);
+                                        
+                                        const inputGroup = document.getElementById(`file-group-${documentId}-${index}`);
+                                        if (inputGroup) {
+                                            inputGroup.style.display = 'none';
+                                            
+                                            // Limpiar el input
+                                            const input = inputGroup.querySelector('input[type="file"]');
+                                            if (input) {
+                                                input.value = '';
+                                                // Notificar a Livewire
+                                                input.dispatchEvent(new Event('input', { bubbles: true }));
+                                            }
+                                            
+                                            // Reducir contador
+                                            if (window.fileCounters[documentId] > 1) {
+                                                window.fileCounters[documentId]--;
+                                            }
+                                            
+                                            // Mostrar botón agregar
+                                            const addBtn = document.getElementById(`add-btn-${documentId}`);
+                                            if (addBtn) {
+                                                addBtn.style.display = 'inline-block';
+                                            }
+                                        }
+                                    };
+                                    
+                                    // Inicializar cuando el DOM esté listo
+                                    document.addEventListener('DOMContentLoaded', function() {
+                                        console.log('Inicializando contadores de archivos...');
+                                        @foreach($basicDocuments as $document)
+                                            @if($this->isMultipleFileDocument($document->id))
+                                                window.fileCounters[{{ $document->id }}] = 1;
+                                                console.log('Inicializado contador para documento {{ $document->id }}');
+                                            @endif
+                                        @endforeach
+                                    });
+                                </script>
+
 </div>

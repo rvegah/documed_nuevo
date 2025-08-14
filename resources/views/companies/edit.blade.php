@@ -10,7 +10,7 @@
         </a>
     </div>
 
-    <form action="{{ route('companies.update', $company) }}" method="POST" enctype="multipart/form-data">
+    <form action="{{ route('companies.update', $company) }}" method="POST" enctype="multipart/form-data" id="company-form">
         @csrf
         @method('PUT')
         
@@ -55,115 +55,6 @@
                                 @enderror
                             </div>
                         </div>
-
-                        {{-- CAMPOS ADICIONALES COMENTADOS TEMPORALMENTE
-                        <!-- Campos adicionales -->
-                        <hr>
-                        <h6>Información Adicional</h6>
-                        
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label for="email">Correo Electrónico</label>
-                                <input type="email" name="email" id="email" 
-                                       class="form-control @error('email') is-invalid @enderror"
-                                       value="{{ old('email', $company->email) }}">
-                                @error('email')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label for="phone">Teléfono</label>
-                                <input type="text" name="phone" id="phone" 
-                                       class="form-control @error('phone') is-invalid @enderror"
-                                       value="{{ old('phone', $company->phone) }}">
-                                @error('phone')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                            </div>
-                        </div>
-
-                        <div class="row">
-                            <div class="col-md-12 mb-3">
-                                <label for="address">Dirección</label>
-                                <input type="text" name="address" id="address" 
-                                       class="form-control @error('address') is-invalid @enderror"
-                                       value="{{ old('address', $company->address) }}">
-                                @error('address')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                            </div>
-                        </div>
-
-                        <div class="row">
-                            <div class="col-md-4 mb-3">
-                                <label for="city">Ciudad</label>
-                                <input type="text" name="city" id="city" 
-                                       class="form-control @error('city') is-invalid @enderror"
-                                       value="{{ old('city', $company->city) }}">
-                                @error('city')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                            </div>
-                            <div class="col-md-4 mb-3">
-                                <label for="postal_code">Código Postal</label>
-                                <input type="text" name="postal_code" id="postal_code" 
-                                       class="form-control @error('postal_code') is-invalid @enderror"
-                                       value="{{ old('postal_code', $company->postal_code) }}">
-                                @error('postal_code')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                            </div>
-                            <div class="col-md-4 mb-3">
-                                <label for="province">Provincia</label>
-                                <input type="text" name="province" id="province" 
-                                       class="form-control @error('province') is-invalid @enderror"
-                                       value="{{ old('province', $company->province) }}">
-                                @error('province')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                            </div>
-                        </div>
-
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label for="company_type">Tipo de Empresa *</label>
-                                <select name="company_type" id="company_type" 
-                                        class="form-control @error('company_type') is-invalid @enderror" required>
-                                    <option value="clinic" {{ old('company_type', $company->company_type) == 'clinic' ? 'selected' : '' }}>Clínica</option>
-                                    <option value="professional" {{ old('company_type', $company->company_type) == 'professional' ? 'selected' : '' }}>Profesional</option>
-                                    <option value="both" {{ old('company_type', $company->company_type) == 'both' ? 'selected' : '' }}>Ambos</option>
-                                </select>
-                                @error('company_type')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <div class="form-check mt-4">
-                                    <input type="checkbox" name="has_center_staff" id="has_center_staff" 
-                                           class="form-check-input" value="1"
-                                           {{ old('has_center_staff', $company->has_center_staff) ? 'checked' : '' }}>
-                                    <label class="form-check-label" for="has_center_staff">
-                                        <strong>¿Tiene personal del centro?</strong>
-                                    </label>
-                                </div>
-                                <small class="form-text text-muted">
-                                    Marque esta opción si la empresa tiene personal profesional o clínico.
-                                </small>
-                            </div>
-                        </div>
-
-                        <div class="row">
-                            <div class="col-md-12 mb-3">
-                                <label for="notes">Notas Adicionales</label>
-                                <textarea name="notes" id="notes" rows="3" 
-                                          class="form-control @error('notes') is-invalid @enderror"
-                                          placeholder="Información adicional relevante">{{ old('notes', $company->notes) }}</textarea>
-                                @error('notes')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                            </div>
-                        </div>
-                        --}}
 
                         <!-- SECCIÓN PARA PERSONAL DEL CENTRO -->
                         @if($company->documents->count() >= 19)
@@ -227,12 +118,52 @@
                         <p><strong>Creado:</strong> {{ $company->created_at->format('d/m/Y H:i') }}</p>
                         <p><strong>Documentos:</strong> {{ $company->documents->count() }}/19</p>
                         
+                        {{-- 🚀 NUEVO: Progreso de documentos obligatorios --}}
+                        @php
+                            $requiredDocs = $documents->where('category', 'basic')->where('required', true);
+                            $uploadedRequiredDocs = $company->documents->whereIn('id', $requiredDocs->pluck('id'));
+                            $missingRequiredDocs = $requiredDocs->whereNotIn('id', $uploadedRequiredDocs->pluck('id'));
+                            $requiredProgress = $requiredDocs->count() > 0 ? ($uploadedRequiredDocs->count() / $requiredDocs->count()) * 100 : 100;
+                        @endphp
+
+                        @if($requiredDocs->count() > 0)
+                            <p><strong>Obligatorios:</strong> {{ $uploadedRequiredDocs->count() }}/{{ $requiredDocs->count() }}</p>
+                            <div class="progress mb-3" style="height: 20px;">
+                                <div class="progress-bar {{ $requiredProgress == 100 ? 'bg-success' : 'bg-danger' }}" 
+                                     style="width: {{ $requiredProgress }}%">
+                                    {{ round($requiredProgress) }}%
+                                </div>
+                            </div>
+
+                            @if($missingRequiredDocs->count() > 0)
+                                <div class="alert alert-danger py-2">
+                                    <small><strong>Documentos obligatorios faltantes:</strong></small>
+                                    <ul class="mb-0 small">
+                                        @foreach($missingRequiredDocs->take(3) as $doc)
+                                            <li>{{ $doc->name }}</li>
+                                        @endforeach
+                                        @if($missingRequiredDocs->count() > 3)
+                                            <li>... y {{ $missingRequiredDocs->count() - 3 }} más</li>
+                                        @endif
+                                    </ul>
+                                </div>
+                            @endif
+                        @endif
+                        
                         <hr>
                         
                         <div class="d-grid gap-2">
-                            <button type="submit" class="btn btn-success">
-                                <i class="fas fa-save"></i> Guardar Cambios
-                            </button>
+                            {{-- 🚀 NUEVO: Botón deshabilitado si faltan documentos obligatorios --}}
+                            @if($missingRequiredDocs->count() > 0)
+                                <button type="button" class="btn btn-success" disabled id="submit-btn">
+                                    <i class="fas fa-exclamation-triangle"></i> Faltan documentos obligatorios
+                                </button>
+                                <small class="text-danger">Debe subir todos los documentos obligatorios para guardar.</small>
+                            @else
+                                <button type="submit" class="btn btn-success" id="submit-btn">
+                                    <i class="fas fa-save"></i> Guardar Cambios
+                                </button>
+                            @endif
                             <a href="{{ route('companies.show', $company) }}" class="btn btn-secondary">
                                 Cancelar
                             </a>
@@ -274,7 +205,14 @@
                         <div class="col-md-4 mb-3">
                             <div class="card border-success">
                                 <div class="card-body">
-                                    <h6 class="card-title">{{ $document->name }}</h6>
+                                    <h6 class="card-title">
+                                        {{ $document->name }}
+                                        @if($document->required)
+                                            <span class="badge bg-danger">Obligatorio</span>
+                                        @else
+                                            <span class="badge bg-secondary">Opcional</span>
+                                        @endif
+                                    </h6>
                                     <p class="card-text">
                                         <small class="text-muted">{{ $document->pivot->original_file_name }}</small>
                                     </p>
@@ -293,4 +231,82 @@
             </div>
         </div>
     @endif
+
+    {{-- 🚀 NUEVO: JavaScript para validación en tiempo real --}}
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Lista de documentos obligatorios (obtenida del backend)
+        const requiredDocuments = @json($requiredDocs->pluck('id')->toArray());
+        const uploadedDocuments = @json($uploadedRequiredDocs->pluck('id')->toArray());
+        
+        console.log('Documentos obligatorios:', requiredDocuments);
+        console.log('Documentos ya subidos:', uploadedDocuments);
+        
+        // Función para validar documentos obligatorios
+        function validateRequiredDocuments() {
+            const form = document.getElementById('company-form');
+            const submitBtn = document.getElementById('submit-btn');
+            const fileInputs = form.querySelectorAll('input[type="file"]');
+            
+            let missingDocuments = [...requiredDocuments];
+            
+            // Remover documentos ya subidos
+            uploadedDocuments.forEach(docId => {
+                const index = missingDocuments.indexOf(docId);
+                if (index > -1) {
+                    missingDocuments.splice(index, 1);
+                }
+            });
+            
+            // Verificar nuevos archivos seleccionados
+            fileInputs.forEach(input => {
+                if (input.files && input.files.length > 0) {
+                    // Extraer document ID del name del input
+                    const match = input.name.match(/documents\[(\d+)\]/);
+                    if (match) {
+                        const docId = parseInt(match[1]);
+                        const index = missingDocuments.indexOf(docId);
+                        if (index > -1) {
+                            missingDocuments.splice(index, 1);
+                        }
+                    }
+                }
+            });
+            
+            console.log('Documentos que aún faltan:', missingDocuments);
+            
+            // Actualizar estado del botón
+            if (missingDocuments.length === 0) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fas fa-save"></i> Guardar Cambios';
+                submitBtn.className = 'btn btn-success';
+            } else {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Faltan ' + missingDocuments.length + ' documentos obligatorios';
+                submitBtn.className = 'btn btn-secondary';
+            }
+            
+            return missingDocuments.length === 0;
+        }
+        
+        // Validar al cambiar archivos
+        document.addEventListener('change', function(e) {
+            if (e.target.type === 'file') {
+                setTimeout(validateRequiredDocuments, 100); // Pequeño delay para asegurar que el cambio se registre
+            }
+        });
+        
+        // Validar al enviar formulario
+        document.getElementById('company-form').addEventListener('submit', function(e) {
+            if (!validateRequiredDocuments()) {
+                e.preventDefault();
+                alert('Debe subir todos los documentos obligatorios antes de guardar.');
+                return false;
+            }
+        });
+        
+        // Validación inicial
+        validateRequiredDocuments();
+    });
+    </script>
 @endsection

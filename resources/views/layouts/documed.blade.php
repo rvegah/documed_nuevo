@@ -41,7 +41,7 @@
                                href="{{ route('admin.document-approval.index') }}">
                                 <i class="fas fa-check-circle text-warning"></i>
                                 Panel de Aprobación
-                                {{-- Contador de documentos pendientes --}}
+                                {{-- Contador de documentos pendientes --}}                                
                                 @php
                                     $pendingCompanyDocs = \App\Models\Company::with(['documents' => function($q) { 
                                         $q->where('valid', false)->orWhereNull('valid'); 
@@ -60,7 +60,7 @@
                                 @if($totalPending > 0)
                                     <span class="badge bg-warning text-dark ms-1">{{ $totalPending }}</span>
                                 @endif
-                            </a>
+                            </a>                            
                         @endif
 
                         {{-- Dashboard de Laravel Breeze --}}
@@ -68,6 +68,12 @@
                            href="{{ route('dashboard') }}">
                             <i class="fas fa-tachometer-alt"></i> Dashboard
                         </a>
+
+                        <a class="nav-link {{ request()->routeIs('admin.document-config.*') ? 'active' : '' }}" 
+                                href="{{ route('admin.document-config.index') }}">
+                                    <i class="fas fa-cogs text-info"></i>
+                                    Configurar Documentos
+                                </a>
                     </div>
                     
                     <!-- Menú de usuario -->

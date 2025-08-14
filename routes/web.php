@@ -4,6 +4,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\StaffController;
 use App\Http\Controllers\DocumentApprovalController;
+use App\Http\Controllers\DocumentConfigController;
 use Illuminate\Support\Facades\Route;
 
 // RUTA RAÍZ - Redirige al login si no está autenticado, al dashboard si está autenticado
@@ -73,10 +74,17 @@ Route::prefix('admin')->middleware(['auth', 'admin'])->group(function () {
     
     Route::post('/document-approval/staff/{staff}/document/{document}/reject', [DocumentApprovalController::class, 'rejectStaffDocument'])
         ->name('admin.document-approval.staff.reject');
+
+    // Configuración de documentos
+    Route::get('/document-config', [DocumentConfigController::class, 'index'])
+        ->name('admin.document-config.index');
+
+    Route::post('/document-config/{document}/toggle', [DocumentConfigController::class, 'toggleRequired'])
+    ->name('admin.document-config.toggle');
 });
 
-// RUTAS DE DESCARGA DE DOCUMENTOS
-Route::middleware('auth')->group(function () {
+    // RUTAS DE DESCARGA DE DOCUMENTOS
+    Route::middleware('auth')->group(function () {
     // Descargar documento individual
     Route::get('/companies/{company}/documents/{document}/download', [CompanyController::class, 'downloadDocument'])
         ->name('companies.documents.download');

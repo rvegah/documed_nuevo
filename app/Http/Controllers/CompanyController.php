@@ -174,7 +174,7 @@ class CompanyController extends Controller
 
     /**
      * Update the specified resource in storage.
-     *  ACTUALIZADO: Verifica autorización y usa auth()->id()
+     * 🚀 ACTUALIZADO: Con validación de documentos obligatorios
      */
     public function update(Request $request, Company $company)
     {
@@ -182,7 +182,7 @@ class CompanyController extends Controller
             //  NUEVO: Verificar autorización
             $this->authorizeCompanyAccess($company);
             
-            // Solo validar campos básicos por ahora
+            // Validar campos básicos
             $validatedData = $request->validate([
                 'company_name' => 'required|string|max:255',
                 'legal_representative_dni' => 'required|string|max:25',
@@ -191,6 +191,9 @@ class CompanyController extends Controller
                 'documents.*' => 'nullable',
                 'documents.*.*' => 'nullable|file|mimes:jpeg,png,pdf|max:4096',
             ]);
+
+            // 🚀 NUEVO: Validar documentos obligatorios
+            $this->validateRequiredDocuments($request, $company);
 
             // Actualizar datos básicos de la empresa
             $company->update($validatedData);
@@ -201,10 +204,84 @@ class CompanyController extends Controller
             }
 
             return redirect()->route('companies.show', $company)->with('success', 'Empresa actualizada exitosamente.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            // Re-lanzar excepciones de validación
+            throw $e;
         } catch (\Exception $e) {
             Log::error("Error al actualizar la compañía: " . $e->getMessage());
             return redirect()->back()->withInput()->with('error', 'No se pudo actualizar la empresa.');
         }
+    }
+
+    /**
+     * 🚀 NUEVO MÉTODO: Validar documentos obligatorios en el backend
+     */
+    private function validateRequiredDocuments(Request $request, Company $company)
+    {
+        // Obtener documentos obligatorios básicos
+        $requiredDocuments = Document::where('category', 'basic')
+            ->where('required', true)
+            ->where('active', true)
+            ->get();
+
+        if ($requiredDocuments->isEmpty()) {
+            Log::info('No hay documentos obligatorios configurados');
+            return; // No hay documentos obligatorios
+        }
+
+        Log::info('Validando documentos obligatorios:', $requiredDocuments->pluck('id', 'name')->toArray());
+
+        // Obtener documentos ya subidos por la empresa
+        $uploadedDocumentIds = $company->documents()->pluck('document_id')->toArray();
+        Log::info('Documentos ya subidos:', $uploadedDocumentIds);
+
+        // Obtener documentos que se están subiendo ahora
+        $newDocumentIds = [];
+        if ($request->hasFile('documents')) {
+            foreach ($request->file('documents') as $documentId => $files) {
+                if ($files) {
+                    // Para documentos múltiples, verificar que al menos un archivo sea válido
+                    if (is_array($files)) {
+                        foreach ($files as $file) {
+                            if ($file && $file->isValid()) {
+                                $newDocumentIds[] = (int)$documentId;
+                                break; // Solo necesitamos uno válido
+                            }
+                        }
+                    } else {
+                        // Documento único
+                        if ($files->isValid()) {
+                            $newDocumentIds[] = (int)$documentId;
+                        }
+                    }
+                }
+            }
+        }
+        Log::info('Documentos nuevos siendo subidos:', $newDocumentIds);
+
+        // Combinar documentos ya subidos + nuevos
+        $allAvailableDocuments = array_unique(array_merge($uploadedDocumentIds, $newDocumentIds));
+        Log::info('Todos los documentos disponibles:', $allAvailableDocuments);
+
+        // Verificar qué documentos obligatorios faltan
+        $missingDocuments = [];
+        foreach ($requiredDocuments as $requiredDoc) {
+            if (!in_array($requiredDoc->id, $allAvailableDocuments)) {
+                $missingDocuments[] = $requiredDoc->name;
+            }
+        }
+
+        // Si faltan documentos obligatorios, lanzar error de validación
+        if (!empty($missingDocuments)) {
+            $errorMessage = 'Debe subir los siguientes documentos obligatorios: ' . implode(', ', $missingDocuments);
+            Log::warning('Documentos obligatorios faltantes:', $missingDocuments);
+            
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'documents' => [$errorMessage]
+            ]);
+        }
+
+        Log::info('Validación de documentos obligatorios exitosa');
     }
 
     /**
@@ -315,9 +392,6 @@ class CompanyController extends Controller
     /**
      * Procesar múltiples archivos para un documento
      */
-/**
- * Procesar múltiples archivos para un documento
- */
     private function processMultipleFiles($files, $documentId, $company, &$documentsToAttach, $startIndex = 1)
     {
         \Log::info("=== PROCESANDO MÚLTIPLES ARCHIVOS ===");

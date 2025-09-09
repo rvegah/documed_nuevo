@@ -12,8 +12,12 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('company_document', function (Blueprint $table) {
-            // Solo crear el índice único (la columna ya existe)
-            $table->unique(['company_id', 'document_id', 'file_index'], 'company_document_unique');
+            // Agregar columna si no existe
+            if (!Schema::hasColumn('company_document', 'file_index')) {
+                $table->integer('file_index')->default(1)->after('document_id');
+                // Crear índice único solo cuando se crea la columna
+                $table->unique(['company_id', 'document_id', 'file_index'], 'company_document_unique');
+            }
         });
     }
 
@@ -23,7 +27,10 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('company_document', function (Blueprint $table) {
-            $table->dropUnique('company_document_unique');
+            if (Schema::hasColumn('company_document', 'file_index')) {
+                $table->dropUnique('company_document_unique');
+                $table->dropColumn('file_index');
+            }
         });
     }
 };
